@@ -1,6 +1,8 @@
 using UnityEngine;
 using Unity.Cinemachine;
 using System.Collections.Generic;
+using Phac.Character.Player;
+using Phac.Utility;
 
 
 
@@ -34,6 +36,7 @@ namespace Phac.Character
         #endregion
 
         #region Members
+        private StateMachine m_StateMachine;
         private List<Utility.Timer> m_Timers;
         private Utility.CountDownTimer m_JumpTimer;
         private Vector2 m_Velocity = Vector2.zero;
@@ -44,10 +47,11 @@ namespace Phac.Character
         void Awake()
         {
             RegisterComponents();
+            ConfigureStateMachine();
 
             // Setup ground check
             float sphereRadius = m_CharacterController.radius * 0.9f;
-            m_GroundChecker.GroundDistance =  m_CharacterController.bounds.extents.y -  sphereRadius + 0.05f;
+            m_GroundChecker.GroundDistance = m_CharacterController.bounds.extents.y - sphereRadius + 0.05f;
             m_GroundChecker.SphereRadius = sphereRadius;
 
             m_MainCameraTransform = FreelookCamera.transform;
@@ -55,13 +59,12 @@ namespace Phac.Character
             m_Timers = new List<Utility.Timer>(2) { m_JumpTimer };
         }
 
+
         void Update()
         {
-            Debug.Log(m_GroundChecker.IsGrounded);
             HandleTimers();
-            HandleMoveAndRotation();
-            ApplyGravity();
-            HandleJump();
+
+            m_StateMachine.Update();
 
             ApplyMovement();
         }
@@ -85,6 +88,20 @@ namespace Phac.Character
             m_GroundChecker = GetComponent<GroundChecker>();
         }
 
+        private void ConfigureStateMachine()
+        {
+            m_StateMachine = new StateMachine();
+            var locomotion = new LocomotionState(this, Animator);
+            var jump = new JumpState(this, Animator);
+
+            At(locomotion, jump, new FuncPredicate(() => m_JumpTimer.IsRunning));
+        }
+
+        private void At(IState from, IState to, IPredicate condition) => m_StateMachine.AddTransition(from, to, condition);
+        private void Any(IState to, IPredicate condition) => m_StateMachine.AddAnyTransition(to, condition);
+
+
+
         private void ApplyMovement()
         {
             if (m_AdjustedDirection.magnitude > 0.0f)
@@ -99,7 +116,7 @@ namespace Phac.Character
             m_CharacterController.Move(movement);
         }
 
-        private void HandleMoveAndRotation()
+        public void HandleMoveAndRotation()
         {
             Vector3 direction = new Vector3(Input.Direction.x, 0.0f, Input.Direction.y).normalized;
             m_AdjustedDirection = Quaternion.AngleAxis(m_MainCameraTransform.eulerAngles.y, Vector3.up) * direction;
@@ -108,7 +125,7 @@ namespace Phac.Character
         }
 
 
-        private void ApplyGravity()
+        public void ApplyGravity()
         {
             // If grounded apply no gravity
             if (m_GroundChecker.IsGrounded)
@@ -123,7 +140,7 @@ namespace Phac.Character
             }
         }
 
-        private void HandleJump()
+        public void HandleJump()
         {
             if (m_JumpTimer.IsRunning)
             {
